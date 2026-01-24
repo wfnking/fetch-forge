@@ -1,15 +1,17 @@
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap");
+
 html {
-    background-color: rgba(27, 38, 54, 1);
+    background: var(--bg);
     text-align: center;
-    color: white;
+    color: var(--text);
+    overflow-x: hidden;
 }
 
 body {
     margin: 0;
-    color: white;
-    font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
-    "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-    sans-serif;
+    color: var(--text);
+    font-family: "Plus Jakarta Sans", "Nunito", "Avenir Next", "Segoe UI", sans-serif;
+    overflow-x: hidden;
 }
 
 @font-face {
@@ -23,4 +25,84 @@ body {
 #app {
     height: 100vh;
     text-align: center;
+}
+
+:root {
+    --bg: radial-gradient(circle at top, #121826 0%, #0c111b 55%, #0a0f17 100%);
+    --text: #e5e7eb;
+    --muted: rgba(229, 231, 235, 0.65);
+    --panel: rgba(15, 23, 42, 0.78);
+    --panel-border: rgba(148, 163, 184, 0.18);
+    --card-bg: rgba(8, 12, 18, 0.65);
+    --card-border: rgba(148, 163, 184, 0.16);
+    --input-bg: rgba(2, 6, 12, 0.5);
+    --input-border: rgba(148, 163, 184, 0.22);
+    --input-border-focus: rgba(59, 130, 246, 0.55);
+    --accent: #111827;
+    --accent-text: #f8fafc;
+    --button-bg: rgba(148, 163, 184, 0.08);
+    --button-bg-hover: rgba(148, 163, 184, 0.14);
+    --button-border: rgba(148, 163, 184, 0.25);
+    --button-border-hover: rgba(148, 163, 184, 0.4);
+    --status-bg: rgba(148, 163, 184, 0.14);
+    --status-text: #e5e7eb;
+    --status-running: rgba(59, 130, 246, 0.35);
+    --status-success: rgba(16, 185, 129, 0.4);
+    --status-success-text: #d1fae5;
+    --status-failed: rgba(244, 63, 94, 0.25);
+    --status-failed-text: #fecdd3;
+    --progress-track: rgba(148, 163, 184, 0.18);
+    --progress-fill: linear-gradient(90deg, #3b82f6, #f97316);
+    --shadow: rgba(0, 0, 0, 0.45);
+    --error: #fb7185;
+    --link-underline: rgba(59, 130, 246, 0.45);
+    --notice-bg: rgba(59, 130, 246, 0.12);
+    --notice-border: rgba(59, 130, 246, 0.3);
+    --notice-text: #e2e8f0;
+    --warning: #fca5a5;
+    --badge-bg: rgba(59, 130, 246, 0.2);
+    --badge-text: #dbeafe;
+    --muted-strong: rgba(226, 232, 240, 0.7);
+    --header-bg: rgba(12, 17, 27, 0.8);
+    --title-hover: #f8fafc;
+}
+
+[data-theme="light"] {
+    --bg: radial-gradient(circle at top, #ffffff 0%, #f8fafc 55%, #eef2f7 100%);
+    --text: #0f172a;
+    --muted: rgba(15, 23, 42, 0.6);
+    --panel: rgba(255, 255, 255, 0.9);
+    --panel-border: rgba(15, 23, 42, 0.1);
+    --card-bg: rgba(15, 23, 42, 0.03);
+    --card-border: rgba(15, 23, 42, 0.08);
+    --input-bg: rgba(15, 23, 42, 0.03);
+    --input-border: rgba(15, 23, 42, 0.18);
+    --input-border-focus: rgba(59, 130, 246, 0.55);
+    --accent: #111827;
+    --accent-text: #f8fafc;
+    --button-bg: rgba(15, 23, 42, 0.05);
+    --button-bg-hover: rgba(15, 23, 42, 0.08);
+    --button-border: rgba(15, 23, 42, 0.16);
+    --button-border-hover: rgba(15, 23, 42, 0.3);
+    --status-bg: rgba(15, 23, 42, 0.08);
+    --status-text: #0f172a;
+    --status-running: rgba(59, 130, 246, 0.18);
+    --status-success: rgba(16, 185, 129, 0.25);
+    --status-success-text: #065f46;
+    --status-failed: rgba(244, 63, 94, 0.18);
+    --status-failed-text: #7f1d1d;
+    --progress-track: rgba(15, 23, 42, 0.12);
+    --progress-fill: linear-gradient(90deg, #f97316, #f43f5e);
+    --shadow: rgba(15, 23, 42, 0.08);
+    --error: #be123c;
+    --link-underline: rgba(59, 130, 246, 0.45);
+    --notice-bg: rgba(59, 130, 246, 0.08);
+    --notice-border: rgba(59, 130, 246, 0.2);
+    --notice-text: #0f172a;
+    --warning: #f472b6;
+    --badge-bg: rgba(59, 130, 246, 0.12);
+    --badge-text: #1e3a8a;
+    --muted-strong: rgba(15, 23, 42, 0.7);
+    --header-bg: rgba(248, 250, 252, 0.9);
+    --title-hover: #1e3a8a;
 }

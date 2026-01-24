@@ -4,4 +4,26 @@ import {main} from '../models';
 
 export function CreateTasksFromText(arg1:string):Promise<Array<main.Task>>;
 
+export function DeleteTask(arg1:string):Promise<void>;
+
+export function ExportTasks():Promise<string>;
+
+export function ExportTasksToFile():Promise<string>;
+
+export function GetActiveProfile():Promise<main.Profile>;
+
+export function GetTaskFileStatus(arg1:string):Promise<string>;
+
+export function ImportTasks(arg1:string,arg2:string):Promise<Array<main.Task>>;
+
+export function ListProfiles():Promise<Array<main.Profile>>;
+
 export function ListTasks():Promise<Array<main.Task>>;
+
+export function OpenPath(arg1:string):Promise<void>;
+
+export function OpenTaskFile(arg1:string):Promise<void>;
+
+export function OpenTaskFolder(arg1:string):Promise<void>;
+
+export function SetActiveProfile(arg1:string):Promise<void>;

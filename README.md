@@ -1,19 +1,64 @@
-# README
+# FetchForge
 
-## About
+FetchForge is a heavyweight desktop forge for harvesting resources from across the web.
+Drop in one link or a whole batch and let FetchForge do the heavy lifting.
 
-This is the official Wails React template.
+中文版请见 `README.zh.md`.
 
-You can configure the project by editing `wails.json`. More information about the project settings can be found
-here: https://wails.io/docs/reference/project-config
+## Features
 
-## Live Development
+- Batch URLs and run a focused download pipeline.
+- Handle resources from a wide range of websites.
+- Local task history that survives restarts.
+- Open output folders or play files with the system default app.
+- File-missing hints when the output path no longer exists.
+- Built-in light/dark themes and EN/中文 toggle.
+- Cross-platform Wails desktop app (macOS/Windows/Linux).
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
+## Design Philosophy
 
-## Building
+FetchForge is built with the following principles:
 
-To build a redistributable, production mode package, use `wails build`.
+- Engine-first: downloading is a pipeline, not a button.
+- Local-first: no accounts, no cloud, no lock-in.
+- Transparent errors: failures should be explainable.
+- Boring tech: Go, Wails, JSON, SQLite.
+
+## Prerequisites
+
+- Go (see `go.mod` for the version).
+- Node.js + npm (for the frontend build).
+- Wails CLI (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`).
+- `yt-dlp` in your PATH (download engine).
+
+## Quick Start
+
+```bash
+# Dev mode (hot reload)
+wails dev
+```
+
+```bash
+# Production build
+wails build
+```
+
+## Project Layout
+
+- `app.go` - backend task queue, storage, and download execution.
+- `main.go` - Wails app bootstrap and window options.
+- `frontend/` - React UI and Wails bindings.
+- `docs/` - product notes and scope.
+- `wails.json` - project configuration.
+
+## Notes
+
+- Downloads are saved under `~/.fetchforge/downloads/<YYYY-MM-DD>/`.
+- Task history persists to `~/.fetchforge/tasks.json`.
+
+## AI/Automation Handoff
+
+If you are automating changes (AI or scripts), include:
+- What command you ran (or wanted to run).
+- The exact files you touched.
+- Any assumptions you made about dependencies, paths, or OS behavior.

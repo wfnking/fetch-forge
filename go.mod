@@ -1,4 +1,4 @@
-module LuxDesk
+module FetchForge
 
 go 1.23
 

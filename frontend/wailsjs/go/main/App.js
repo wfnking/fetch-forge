@@ -6,6 +6,50 @@ export function CreateTasksFromText(arg1) {
   return window['go']['main']['App']['CreateTasksFromText'](arg1);
 }
 
+export function DeleteTask(arg1) {
+  return window['go']['main']['App']['DeleteTask'](arg1);
+}
+
+export function ExportTasks() {
+  return window['go']['main']['App']['ExportTasks']();
+}
+
+export function ExportTasksToFile() {
+  return window['go']['main']['App']['ExportTasksToFile']();
+}
+
+export function GetActiveProfile() {
+  return window['go']['main']['App']['GetActiveProfile']();
+}
+
+export function GetTaskFileStatus(arg1) {
+  return window['go']['main']['App']['GetTaskFileStatus'](arg1);
+}
+
+export function ImportTasks(arg1, arg2) {
+  return window['go']['main']['App']['ImportTasks'](arg1, arg2);
+}
+
+export function ListProfiles() {
+  return window['go']['main']['App']['ListProfiles']();
+}
+
 export function ListTasks() {
   return window['go']['main']['App']['ListTasks']();
+}
+
+export function OpenPath(arg1) {
+  return window['go']['main']['App']['OpenPath'](arg1);
+}
+
+export function OpenTaskFile(arg1) {
+  return window['go']['main']['App']['OpenTaskFile'](arg1);
+}
+
+export function OpenTaskFolder(arg1) {
+  return window['go']['main']['App']['OpenTaskFolder'](arg1);
+}
+
+export function SetActiveProfile(arg1) {
+  return window['go']['main']['App']['SetActiveProfile'](arg1);
 }
