@@ -1,8 +1,8 @@
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap");
+@import "tailwindcss";
 
 html {
     background: var(--bg);
-    text-align: center;
     color: var(--text);
     overflow-x: hidden;
 }
@@ -20,11 +20,6 @@ body {
     font-weight: 400;
     src: local(""),
     url("assets/fonts/nunito-v16-latin-regular.woff2") format("woff2");
-}
-
-#app {
-    height: 100vh;
-    text-align: center;
 }
 
 :root {
@@ -51,11 +46,8 @@ body {
     --status-success-text: #d1fae5;
     --status-failed: rgba(244, 63, 94, 0.25);
     --status-failed-text: #fecdd3;
-    --progress-track: rgba(148, 163, 184, 0.18);
-    --progress-fill: linear-gradient(90deg, #3b82f6, #f97316);
     --shadow: rgba(0, 0, 0, 0.45);
     --error: #fb7185;
-    --link-underline: rgba(59, 130, 246, 0.45);
     --notice-bg: rgba(59, 130, 246, 0.12);
     --notice-border: rgba(59, 130, 246, 0.3);
     --notice-text: #e2e8f0;
@@ -91,11 +83,8 @@ body {
     --status-success-text: #065f46;
     --status-failed: rgba(244, 63, 94, 0.18);
     --status-failed-text: #7f1d1d;
-    --progress-track: rgba(15, 23, 42, 0.12);
-    --progress-fill: linear-gradient(90deg, #f97316, #f43f5e);
     --shadow: rgba(15, 23, 42, 0.08);
     --error: #be123c;
-    --link-underline: rgba(59, 130, 246, 0.45);
     --notice-bg: rgba(59, 130, 246, 0.08);
     --notice-border: rgba(59, 130, 246, 0.2);
     --notice-text: #0f172a;

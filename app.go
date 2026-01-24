@@ -64,6 +64,8 @@ const (
 	statusFailed  = "Failed"
 )
 
+const maxConcurrentDownloads = 3
+
 type Profile struct {
 	ID   string   `json:"id"`
 	Name string   `json:"name"`
@@ -324,7 +326,7 @@ func (a *App) ExportTasksToFile() (string, error) {
 	return path, nil
 }
 
-func (a *App) ImportTasks(jsonText string, mode string) ([]Task, error) {
+func (a *App) ImportTasks(jsonText string, mode string, overwriteDownloaded bool) ([]Task, error) {
 	if strings.TrimSpace(jsonText) == "" {
 		return nil, errors.New("empty import payload")
 	}
@@ -338,11 +340,19 @@ func (a *App) ImportTasks(jsonText string, mode string) ([]Task, error) {
 		if strings.TrimSpace(imported[i].ID) == "" {
 			return nil, errors.New("task id is required")
 		}
+		if overwriteDownloaded && imported[i].Status == statusSuccess {
+			imported[i].Status = statusQueued
+			imported[i].Progress = ""
+			imported[i].OutputPath = ""
+			imported[i].MissingOutput = false
+			imported[i].ErrorMessage = ""
+		}
 		imported[i].MissingOutput = outputMissing(imported[i].OutputPath)
 	}
 
 	switch mode {
 	case "merge":
+		var enqueueIDs []string
 		a.mu.Lock()
 		for i := range imported {
 			item := imported[i]
@@ -356,6 +366,9 @@ func (a *App) ImportTasks(jsonText string, mode string) ([]Task, error) {
 			copy := item
 			a.tasks[item.ID] = &copy
 			a.order = append(a.order, item.ID)
+			if item.Status == statusQueued {
+				enqueueIDs = append(enqueueIDs, item.ID)
+			}
 		}
 		out := make([]Task, 0, len(a.order))
 		for _, id := range a.order {
@@ -364,9 +377,11 @@ func (a *App) ImportTasks(jsonText string, mode string) ([]Task, error) {
 			}
 		}
 		a.mu.Unlock()
+		a.enqueueTasks(enqueueIDs)
 		a.saveTasks()
 		return out, nil
 	case "replace":
+		var enqueueIDs []string
 		a.mu.Lock()
 		a.tasks = make(map[string]*Task, len(imported))
 		a.order = make([]string, 0, len(imported))
@@ -375,6 +390,9 @@ func (a *App) ImportTasks(jsonText string, mode string) ([]Task, error) {
 			copy := item
 			a.tasks[item.ID] = &copy
 			a.order = append(a.order, item.ID)
+			if item.Status == statusQueued {
+				enqueueIDs = append(enqueueIDs, item.ID)
+			}
 		}
 		out := make([]Task, 0, len(a.order))
 		for _, id := range a.order {
@@ -383,6 +401,7 @@ func (a *App) ImportTasks(jsonText string, mode string) ([]Task, error) {
 			}
 		}
 		a.mu.Unlock()
+		a.enqueueTasks(enqueueIDs)
 		a.saveTasks()
 		return out, nil
 	default:
@@ -457,8 +476,18 @@ func moveToTrash(target string) error {
 }
 
 func (a *App) worker() {
-	for id := range a.queue {
-		a.runTask(id)
+	for i := 0; i < maxConcurrentDownloads; i++ {
+		go func() {
+			for id := range a.queue {
+				a.runTask(id)
+			}
+		}()
+	}
+}
+
+func (a *App) enqueueTasks(ids []string) {
+	for _, id := range ids {
+		a.queue <- id
 	}
 }
 
@@ -817,10 +846,28 @@ func newestFilePath(root string) string {
 type ytdlpMetadata struct {
 	Title          string   `json:"title"`
 	Duration       *float64 `json:"duration"`
+	Extractor      string   `json:"extractor"`
+	Resolution     string   `json:"resolution"`
 	Filesize       *float64 `json:"filesize"`
 	FilesizeApprox *float64 `json:"filesize_approx"`
 	Width          *float64 `json:"width"`
 	Height         *float64 `json:"height"`
+	Formats        []ytdlpFormat `json:"formats"`
+}
+
+type ytdlpFormat struct {
+	Resolution     string   `json:"resolution"`
+	Width          *float64 `json:"width"`
+	Height         *float64 `json:"height"`
+	Filesize       *float64 `json:"filesize"`
+	FilesizeApprox *float64 `json:"filesize_approx"`
+}
+
+type formatInfo struct {
+	Resolution string
+	Width      int
+	Height     int
+	Filesize   int64
 }
 
 func fetchMetadata(targetURL string) *Task {
@@ -836,13 +883,30 @@ func fetchMetadata(targetURL string) *Task {
 	if err := json.Unmarshal(output, &info); err != nil {
 		return nil
 	}
+	best := pickBestFormat(info.Formats)
+	width := floatToInt(info.Width)
+	height := floatToInt(info.Height)
+	if width == 0 && height == 0 && info.Resolution != "" {
+		width, height = parseResolution(info.Resolution)
+	}
+	if width == 0 && height == 0 {
+		width, height = best.Width, best.Height
+	}
+	filesize := pickFilesize(info.Filesize, info.FilesizeApprox)
+	if filesize == 0 {
+		filesize = best.Filesize
+	}
+	source := strings.TrimSpace(info.Extractor)
+	if source == "" {
+		source = sourceHostFromURL(targetURL)
+	}
 	metadata := &Task{
 		Title:      strings.TrimSpace(info.Title),
 		Duration:   floatToInt(info.Duration),
-		Filesize:   pickFilesize(info.Filesize, info.FilesizeApprox),
-		Width:      floatToInt(info.Width),
-		Height:     floatToInt(info.Height),
-		SourceHost: sourceHostFromURL(targetURL),
+		Filesize:   filesize,
+		Width:      width,
+		Height:     height,
+		SourceHost: source,
 	}
 	return metadata
 }
@@ -862,6 +926,50 @@ func pickFilesize(primary, fallback *float64) int64 {
 		return int64(*fallback)
 	}
 	return 0
+}
+
+func pickBestFormat(formats []ytdlpFormat) formatInfo {
+	var best formatInfo
+	var bestScore int64
+	for _, format := range formats {
+		filesize := pickFilesize(format.Filesize, format.FilesizeApprox)
+		width := floatToInt(format.Width)
+		height := floatToInt(format.Height)
+		resolution := strings.TrimSpace(format.Resolution)
+		if width == 0 && height == 0 && resolution != "" {
+			width, height = parseResolution(resolution)
+		}
+		score := filesize
+		if score == 0 {
+			score = int64(width * height)
+		}
+		if score > bestScore {
+			bestScore = score
+			best = formatInfo{
+				Resolution: resolution,
+				Width:      width,
+				Height:     height,
+				Filesize:   filesize,
+			}
+		}
+	}
+	return best
+}
+
+func parseResolution(value string) (int, int) {
+	parts := strings.Split(strings.ToLower(strings.TrimSpace(value)), "x")
+	if len(parts) != 2 {
+		return 0, 0
+	}
+	width, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil {
+		return 0, 0
+	}
+	height, err := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err != nil {
+		return 0, 0
+	}
+	return width, height
 }
 
 func newestFilePathAfter(root string, after time.Time) string {

@@ -26,8 +26,8 @@ export function GetTaskFileStatus(arg1) {
   return window['go']['main']['App']['GetTaskFileStatus'](arg1);
 }
 
-export function ImportTasks(arg1, arg2) {
-  return window['go']['main']['App']['ImportTasks'](arg1, arg2);
+export function ImportTasks(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ImportTasks'](arg1, arg2, arg3);
 }
 
 export function ListProfiles() {

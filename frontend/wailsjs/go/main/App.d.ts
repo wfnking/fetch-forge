@@ -14,7 +14,7 @@ export function GetActiveProfile():Promise<main.Profile>;
 
 export function GetTaskFileStatus(arg1:string):Promise<string>;
 
-export function ImportTasks(arg1:string,arg2:string):Promise<Array<main.Task>>;
+export function ImportTasks(arg1:string,arg2:string,arg3:boolean):Promise<Array<main.Task>>;
 
 export function ListProfiles():Promise<Array<main.Profile>>;
 

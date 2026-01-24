@@ -1,5 +1,4 @@
-import {useEffect, useRef, useState} from 'react';
-import './App.css';
+import {useEffect, useState} from 'react';
 import {
     CreateTasksFromText,
     DeleteTask,
@@ -71,6 +70,7 @@ const copy = {
         importConfirm: "Import",
         importCancel: "Cancel",
         importPickFile: "Choose file",
+        importOverwrite: "Overwrite downloaded (requeue)",
         noticeExport: "Exported to",
         noticeOpenFolder: "Open folder",
         noticeClose: "Close",
@@ -115,6 +115,7 @@ const copy = {
         importConfirm: "确认导入",
         importCancel: "取消",
         importPickFile: "选择文件",
+        importOverwrite: "覆盖已下载并重新入队",
         noticeExport: "已导出到",
         noticeOpenFolder: "打开目录",
         noticeClose: "关闭",
@@ -151,6 +152,7 @@ function App() {
     const [importText, setImportText] = useState('');
     const [importMode, setImportMode] = useState('merge');
     const [importFileName, setImportFileName] = useState('');
+    const [overwriteDownloaded, setOverwriteDownloaded] = useState(false);
 
     const updateMissingFile = (taskId, status) => {
         setMissingFiles((prev) => {
@@ -353,12 +355,13 @@ function App() {
 
     const handleImport = async () => {
         try {
-            await ImportTasks(importText, importMode);
+            await ImportTasks(importText, importMode, overwriteDownloaded);
             const items = await ListTasks();
             setTasks(items || []);
             refreshMissingStatuses(items || []);
             setImportText('');
             setImportFileName('');
+            setOverwriteDownloaded(false);
             setShowImportModal(false);
             showNotice(dictionary.noticeImport);
         } catch (err) {
@@ -420,6 +423,18 @@ function App() {
 
     const dictionary = copy[language] || copy.en;
     const getStatusLabel = (status) => dictionary.status[status] || status;
+    const getStatusClass = (status) => {
+        if (status === "Running") {
+            return "bg-[var(--status-running)] text-[var(--status-text)]";
+        }
+        if (status === "Success") {
+            return "bg-[var(--status-success)] text-[var(--status-success-text)]";
+        }
+        if (status === "Failed") {
+            return "bg-[var(--status-failed)] text-[var(--status-failed-text)]";
+        }
+        return "bg-[var(--status-bg)] text-[var(--status-text)]";
+    };
     const showNotice = (message, options = {}) => {
         if (!message) {
             return;
@@ -537,23 +552,6 @@ function App() {
         return '';
     };
 
-    const getMetaItems = (task) => {
-        const items = [];
-        const duration = formatDuration(task?.duration);
-        if (duration) {
-            items.push({label: dictionary.meta.duration, value: duration});
-        }
-        const size = formatBytes(task?.filesize);
-        if (size) {
-            items.push({label: dictionary.meta.size, value: size});
-        }
-        const resolution = formatResolution(task);
-        if (resolution) {
-            items.push({label: dictionary.meta.resolution, value: resolution});
-        }
-        return items;
-    };
-
     const getInlineMetaItems = (task) => {
         const items = [];
         const duration = formatDuration(task?.duration);
@@ -575,13 +573,13 @@ function App() {
     };
 
     const PlayIcon = () => (
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M8 5l11 7-11 7V5z" fill="currentColor" />
         </svg>
     );
 
     const TrashIcon = () => (
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path
                 d="M4 7h16M9 3h6l1 2H8l1-2zm1 6v8m4-8v8m3-8v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V9"
                 fill="none"
@@ -612,35 +610,35 @@ function App() {
     });
 
     return (
-        <div className="app-shell">
-            <header className="header">
-                <div className="header-inner">
-                    <div className="title-row">
-                        <div className="title">FetchForge</div>
-                        <div className="header-actions">
+        <div className="min-h-screen bg-[var(--bg)] text-[var(--text)]">
+            <header className="sticky top-0 z-10 border-b border-[var(--panel-border)] bg-[var(--header-bg)] backdrop-blur">
+                <div className="mx-auto w-full max-w-[1120px] px-6 pt-4 pb-3">
+                    <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-4">
+                        <div className="text-[32px] font-bold tracking-[0.5px]">FetchForge</div>
+                        <div className="inline-flex flex-1 flex-wrap items-center justify-end gap-2">
                             <button
-                                className="btn-tertiary"
+                                className="cursor-pointer rounded-lg border border-[var(--button-border)] px-2.5 py-1 text-[11px] uppercase tracking-[0.4px] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--button-border-hover)]"
                                 type="button"
                                 onClick={handleExport}
                             >
                                 {dictionary.export}
                             </button>
                             <button
-                                className="btn-tertiary"
+                                className="cursor-pointer rounded-lg border border-[var(--button-border)] px-2.5 py-1 text-[11px] uppercase tracking-[0.4px] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--button-border-hover)]"
                                 type="button"
                                 onClick={() => setShowImportModal(true)}
                             >
                                 {dictionary.import}
                             </button>
                             <button
-                                className="btn-tertiary"
+                                className="cursor-pointer rounded-lg border border-[var(--button-border)] px-2.5 py-1 text-[11px] uppercase tracking-[0.4px] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--button-border-hover)]"
                                 type="button"
                                 onClick={() => setLanguage(language === 'en' ? 'zh' : 'en')}
                             >
                                 {dictionary.language}
                             </button>
                             <button
-                                className="btn-tertiary"
+                                className="cursor-pointer rounded-lg border border-[var(--button-border)] px-2.5 py-1 text-[11px] uppercase tracking-[0.4px] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--button-border-hover)]"
                                 type="button"
                                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                             >
@@ -648,194 +646,221 @@ function App() {
                             </button>
                         </div>
                     </div>
-                    <div className="subtitle">{dictionary.subtitle}</div>
-                {notice ? (
-                    <div className="notice" role="status">
-                        <span className="notice-text">{notice.message}</span>
-                        <div className="notice-actions">
-                            {notice.actionLabel && notice.onAction ? (
+                    <div className="mt-1.5 text-[14px] text-[var(--muted)]">{dictionary.subtitle}</div>
+                    {notice ? (
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--notice-border)] bg-[var(--notice-bg)] px-3 py-2 text-left text-[12px] text-[var(--notice-text)]">
+                            <span className="break-words">{notice.message}</span>
+                            <div className="inline-flex flex-wrap items-center gap-2">
+                                {notice.actionLabel && notice.onAction ? (
+                                    <button
+                                        className="cursor-pointer rounded-lg border border-[var(--button-border)] px-2.5 py-1 text-[11px] uppercase tracking-[0.4px] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--button-border-hover)]"
+                                        type="button"
+                                        onClick={notice.onAction}
+                                    >
+                                        {notice.actionLabel}
+                                    </button>
+                                ) : null}
                                 <button
-                                    className="btn-tertiary"
+                                    className="cursor-pointer rounded-lg border border-[var(--button-border)] px-2.5 py-1 text-[11px] uppercase tracking-[0.4px] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--button-border-hover)]"
                                     type="button"
-                                    onClick={notice.onAction}
+                                    onClick={() => setNotice(null)}
                                 >
-                                    {notice.actionLabel}
+                                    {dictionary.noticeClose}
                                 </button>
-                            ) : null}
-                            <button
-                                className="btn-tertiary"
-                                type="button"
-                                onClick={() => setNotice(null)}
+                            </div>
+                        </div>
+                    ) : null}
+                </div>
+            </header>
+            <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-6 px-6 py-8">
+                <section className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel)] p-5 text-left shadow-[0_14px_30px_var(--shadow)]">
+                    <label className="text-[12px] uppercase tracking-[0.5px] text-[var(--muted)]" htmlFor="url-input">
+                        {dictionary.urlsLabel}
+                    </label>
+                    <textarea
+                        id="url-input"
+                        className="mt-2.5 w-full resize-none rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] p-3 text-[14px] leading-[1.4] text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--input-border-focus)]"
+                        placeholder={dictionary.urlsPlaceholder}
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        onKeyDown={handleInputKeyDown}
+                        rows={6}
+                    />
+                    <div className="mt-2 text-[12px] text-[var(--muted)]">{dictionary.tip}</div>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                        <div className="inline-flex items-center gap-2 text-[12px] text-[var(--muted)]">
+                            <span className="text-[10px] uppercase tracking-[0.4px]">{dictionary.profile}</span>
+                            <select
+                                className="h-9 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-[12px] text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--input-border-focus)]"
+                                value={activeProfile?.id || defaultProfileID}
+                                onChange={handleProfileChange}
                             >
-                                {dictionary.noticeClose}
-                            </button>
+                                {profiles.map((profile) => (
+                                    <option key={profile.id} value={profile.id}>
+                                        {profile.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <button
+                            className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-[var(--accent)] px-4 py-2 font-semibold text-[var(--accent-text)] shadow-sm transition hover:shadow-[0_8px_16px_rgba(0,0,0,0.2)]"
+                            onClick={handleDownload}
+                        >
+                            {dictionary.download}
+                        </button>
+                    </div>
+                </section>
+                <section className="rounded-xl border border-[var(--panel-border)] bg-[var(--panel)] p-5 text-left shadow-[0_14px_30px_var(--shadow)]">
+                    <div className="mb-3 text-[16px] font-semibold">{dictionary.tasks}</div>
+                    {tasks.length === 0 ? (
+                        <div className="text-[13px] text-[var(--muted)]">{dictionary.empty}</div>
+                    ) : (
+                        <div className="flex flex-col gap-3">
+                            {sortedTasks.map((task) => (
+                                <div key={task.id} className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] p-3">
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <button
+                                            className="text-left text-[14px] font-semibold text-[var(--text)] hover:text-[var(--title-hover)] hover:underline hover:underline-offset-4"
+                                            type="button"
+                                            onClick={() => handleOpenURL(task.url)}
+                                        >
+                                            {getDisplayTitle(task)}
+                                        </button>
+                                        <div className="inline-flex items-center gap-2">
+                                            <div className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] uppercase tracking-[0.4px] ${getStatusClass(task.status)}`}>
+                                                <span className="text-[11px]">{getStatusLabel(task.status)}</span>
+                                                {getProgressLabel(task) ? (
+                                                    <span className="rounded-full bg-[var(--badge-bg)] px-1.5 py-0.5 text-[11px] tracking-[0.2px] text-[var(--badge-text)]">
+                                                        {getProgressLabel(task)}
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            {task.status === "Success" ? (
+                                                <button
+                                                    className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--button-border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--button-border-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                                                    type="button"
+                                                    onClick={() => handleOpenFile(task.id)}
+                                                    disabled={missingFiles.has(task.id)}
+                                                    aria-label={dictionary.play}
+                                                    title={dictionary.play}
+                                                >
+                                                    <PlayIcon />
+                                                </button>
+                                            ) : null}
+                                            <button
+                                                className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--button-border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--button-border-hover)]"
+                                                type="button"
+                                                onClick={() => handleDeleteTask(task.id)}
+                                                aria-label={dictionary.delete}
+                                                title={dictionary.delete}
+                                            >
+                                                <TrashIcon />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="mt-1.5 flex flex-wrap items-baseline gap-2.5">
+                                        <div className="text-[12px] text-[var(--muted)] tabular-nums tracking-[0.2px]">
+                                            {formatDateTime(
+                                                task.status === "Success" || task.status === "Failed"
+                                                    ? task.updatedAt
+                                                    : task.createdAt
+                                            )}
+                                        </div>
+                                        {getInlineMetaItems(task).length ? (
+                                            <div className="inline-flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-[var(--muted)] tracking-[0.2px]">
+                                                {getInlineMetaItems(task).map((item) => (
+                                                    <span key={item.label} className="inline-flex items-baseline gap-1.5">
+                                                        <span className="text-[10px] uppercase tracking-[0.35px] text-[var(--muted-strong)]">{item.label}</span>
+                                                        <span>{item.value}</span>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : null}
+                                        {getMissingMessage(task) ? (
+                                            <div className="text-[12px] text-[var(--warning)]">{getMissingMessage(task)}</div>
+                                        ) : null}
+                                    </div>
+                                    {task.status === "Failed" && task.errorMessage ? (
+                                        <div className="mt-1.5 text-[12px] text-[var(--error)]">{task.errorMessage}</div>
+                                    ) : null}
+                                    {task.status === "Success" ? (
+                                    <button
+                                        className="mt-2 inline-flex h-9 cursor-pointer items-center justify-center rounded-lg border border-[var(--button-border)] bg-[var(--button-bg)] px-3 text-[12px] uppercase tracking-[0.4px] text-[var(--text)] hover:bg-[var(--button-bg-hover)]"
+                                        onClick={() => handleOpenFolder(task.id)}
+                                    >
+                                        {dictionary.openFolder}
+                                    </button>
+                                    ) : null}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </section>
+                {showImportModal ? (
+                    <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/60 p-5" role="dialog" aria-modal="true">
+                        <div className="w-full max-w-[640px] rounded-xl border border-[var(--panel-border)] bg-[var(--panel)] p-4 text-left shadow-[0_20px_40px_var(--shadow)]">
+                            <div className="text-[16px] font-semibold">{dictionary.importTitle}</div>
+                            <div className="mt-1.5 text-[12px] text-[var(--muted)]">{dictionary.importHint}</div>
+                            <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                                <button
+                                    className="cursor-pointer rounded-lg border border-[var(--button-border)] px-2.5 py-1 text-[11px] uppercase tracking-[0.4px] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--button-border-hover)]"
+                                    type="button"
+                                    onClick={() => document.getElementById("import-file")?.click()}
+                                >
+                                    {dictionary.importPickFile}
+                                </button>
+                                <span className="text-[12px] text-[var(--muted)]">{importFileName || "JSON"}</span>
+                                <input
+                                    id="import-file"
+                                    className="hidden"
+                                    type="file"
+                                    accept=".json,application/json"
+                                    onChange={handleImportFileChange}
+                                />
+                            </div>
+                            <textarea
+                                className="mt-3 w-full resize-none rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] p-3 text-[12px] leading-[1.5] text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--input-border-focus)] font-mono"
+                                rows={8}
+                                value={importText}
+                                onChange={(e) => setImportText(e.target.value)}
+                                placeholder='[{"id":"...","url":"..."}]'
+                            />
+                            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                                <select
+                                    className="h-9 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-[12px] text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--input-border-focus)]"
+                                    value={importMode}
+                                    onChange={(e) => setImportMode(e.target.value)}
+                                >
+                                    <option value="merge">merge</option>
+                                    <option value="replace">replace</option>
+                                </select>
+                                <label className="inline-flex cursor-pointer items-center gap-2 text-[12px] text-[var(--muted)]">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4 accent-[var(--accent)]"
+                                        checked={overwriteDownloaded}
+                                        onChange={(e) => setOverwriteDownloaded(e.target.checked)}
+                                    />
+                                    {dictionary.importOverwrite}
+                                </label>
+                                <div className="inline-flex items-center gap-2">
+                                    <button
+                                        className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg border border-[var(--button-border)] bg-[var(--button-bg)] px-3 text-[12px] uppercase tracking-[0.4px] text-[var(--text)] hover:bg-[var(--button-bg-hover)]"
+                                        onClick={() => setShowImportModal(false)}
+                                    >
+                                        {dictionary.importCancel}
+                                    </button>
+                                    <button
+                                        className="inline-flex h-9 cursor-pointer items-center justify-center rounded-lg bg-[var(--accent)] px-3 text-[12px] font-semibold text-[var(--accent-text)] shadow-sm transition hover:shadow-[0_8px_16px_rgba(0,0,0,0.2)]"
+                                        onClick={handleImport}
+                                    >
+                                        {dictionary.importConfirm}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 ) : null}
-                </div>
-            </header>
-            <div className="app">
-            <section className="input-panel">
-                <label className="label" htmlFor="url-input">{dictionary.urlsLabel}</label>
-                <textarea
-                    id="url-input"
-                    className="textarea"
-                    placeholder={dictionary.urlsPlaceholder}
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    onKeyDown={handleInputKeyDown}
-                    rows={6}
-                />
-                <div className="hint">{dictionary.tip}</div>
-                <div className="actions">
-                    <div className="profile-control">
-                        <span className="profile-label">{dictionary.profile}</span>
-                        <select
-                            className="profile-select"
-                            value={activeProfile?.id || defaultProfileID}
-                            onChange={handleProfileChange}
-                        >
-                            {profiles.map((profile) => (
-                                <option key={profile.id} value={profile.id}>
-                                    {profile.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <button className="btn" onClick={handleDownload}>{dictionary.download}</button>
-                </div>
-            </section>
-            <section className="task-panel">
-                    <div className="panel-title">{dictionary.tasks}</div>
-                {tasks.length === 0 ? (
-                    <div className="empty-state">{dictionary.empty}</div>
-                ) : (
-                    <div className="task-list">
-                        {sortedTasks.map((task) => (
-                            <div key={task.id} className={`task-card status-${task.status?.toLowerCase()}`}>
-                                <div className="task-row">
-                                    <button
-                                        className="title-link"
-                                        type="button"
-                                        onClick={() => handleOpenURL(task.url)}
-                                    >
-                                        {getDisplayTitle(task)}
-                                    </button>
-                                    <div className="task-actions">
-                                        <div className="task-status">
-                                            <span className="status-text">{getStatusLabel(task.status)}</span>
-                                            {getProgressLabel(task) ? (
-                                                <span className="status-badge">{getProgressLabel(task)}</span>
-                                            ) : null}
-                                        </div>
-                                        {task.status === "Success" ? (
-                                            <button
-                                                className="btn-tertiary icon-btn"
-                                                type="button"
-                                                onClick={() => handleOpenFile(task.id)}
-                                                disabled={missingFiles.has(task.id)}
-                                                aria-label={dictionary.play}
-                                                title={dictionary.play}
-                                            >
-                                                <PlayIcon />
-                                            </button>
-                                        ) : null}
-                                        <button
-                                            className="btn-tertiary icon-btn"
-                                            type="button"
-                                            onClick={() => handleDeleteTask(task.id)}
-                                            aria-label={dictionary.delete}
-                                            title={dictionary.delete}
-                                        >
-                                            <TrashIcon />
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="task-time-row">
-                                    <div className="task-time">
-                                        {formatDateTime(
-                                            task.status === "Success" || task.status === "Failed"
-                                                ? task.updatedAt
-                                                : task.createdAt
-                                        )}
-                                    </div>
-                                    {getInlineMetaItems(task).length ? (
-                                        <div className="task-inline-meta">
-                                            {getInlineMetaItems(task).map((item) => (
-                                                <span key={item.label} className="meta-inline-item">
-                                                    <span className="meta-inline-label">{item.label}</span>
-                                                    <span className="meta-inline-value">{item.value}</span>
-                                                </span>
-                                            ))}
-                                        </div>
-                                    ) : null}
-                                    {getMissingMessage(task) ? (
-                                        <div className="task-warning">{getMissingMessage(task)}</div>
-                                    ) : null}
-                                </div>
-                                {task.status === "Failed" && task.errorMessage ? (
-                                    <div className="task-error">{task.errorMessage}</div>
-                                ) : null}
-                                {task.status === "Success" ? (
-                                    <button className="btn-secondary" onClick={() => handleOpenFolder(task.id)}>
-                                        {dictionary.openFolder}
-                                    </button>
-                                ) : null}
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </section>
-            {showImportModal ? (
-                <div className="modal-overlay" role="dialog" aria-modal="true">
-                    <div className="modal-card">
-                        <div className="modal-title">{dictionary.importTitle}</div>
-                        <div className="modal-hint">{dictionary.importHint}</div>
-                        <div className="modal-file">
-                            <button
-                                className="btn-tertiary"
-                                type="button"
-                                onClick={() => document.getElementById("import-file")?.click()}
-                            >
-                                {dictionary.importPickFile}
-                            </button>
-                            <span className="modal-file-name">{importFileName || "JSON"}</span>
-                            <input
-                                id="import-file"
-                                className="modal-file-input"
-                                type="file"
-                                accept=".json,application/json"
-                                onChange={handleImportFileChange}
-                            />
-                        </div>
-                        <textarea
-                            className="modal-textarea"
-                            rows={8}
-                            value={importText}
-                            onChange={(e) => setImportText(e.target.value)}
-                            placeholder='[{"id":"...","url":"..."}]'
-                        />
-                        <div className="modal-actions">
-                            <select
-                                className="profile-select"
-                                value={importMode}
-                                onChange={(e) => setImportMode(e.target.value)}
-                            >
-                                <option value="merge">merge</option>
-                                <option value="replace">replace</option>
-                            </select>
-                            <div className="modal-buttons">
-                                <button className="btn-secondary" onClick={() => setShowImportModal(false)}>
-                                    {dictionary.importCancel}
-                                </button>
-                                <button className="btn" onClick={handleImport}>
-                                    {dictionary.importConfirm}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            ) : null}
             </div>
         </div>
     )
