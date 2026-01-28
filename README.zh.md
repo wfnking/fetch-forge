@@ -13,6 +13,25 @@ FetchForge 是一款桌面级资源下载工具，面向批量链接与高频下
 - 内置浅色/深色主题与中英切换。
 - Wails 桌面应用（macOS/Windows/Linux）。
 
+## 架构
+
+```
+[React UI] -> (Wails bridge) -> [Go Backend: Task Queue + Storage]
+                              -> [Download Engine (yt-dlp)]
+                              -> [Filesystem: downloads + cover cache]
+```
+
+持久化：
+- 任务：`~/.fetchforge/tasks.json`
+- 配置：`~/.fetchforge/config.json`
+
+## 设计理念
+
+- 本地优先
+- 引擎无关
+- 错误透明
+- UI 极简，流程强
+
 ## 运行环境
 
 - Go（版本见 `go.mod`）。
@@ -44,6 +63,7 @@ wails build
 
 - 下载目录：`~/.fetchforge/downloads/<YYYY-MM-DD>/`
 - 任务历史：`~/.fetchforge/tasks.json`
+- 配置文件：`~/.fetchforge/config.json`
 
 ## AI/Automation Handoff
 

@@ -15,14 +15,29 @@ Drop in one link or a whole batch and let FetchForge do the heavy lifting.
 - Built-in light/dark themes and EN/中文 toggle.
 - Cross-platform Wails desktop app (macOS/Windows/Linux).
 
+## Architecture
+
+```
+[React UI] -> (Wails bridge) -> [Go Backend: Task Queue + Storage]
+                              -> [Download Engine (yt-dlp)]
+                              -> [Filesystem: downloads + cover cache]
+```
+
+Persistence:
+- Tasks: `~/.fetchforge/tasks.json`
+- Config: `~/.fetchforge/config.json`
+
 ## Design Philosophy
 
-FetchForge is built with the following principles:
+- Local-first
+- Engine-agnostic
+- Transparent errors
+- Minimal UI, strong workflow
 
-- Engine-first: downloading is a pipeline, not a button.
-- Local-first: no accounts, no cloud, no lock-in.
-- Transparent errors: failures should be explainable.
-- Boring tech: Go, Wails, JSON, SQLite.
+## Notes
+
+- Downloads are saved under `~/.fetchforge/downloads/<YYYY-MM-DD>/`.
+- Task history persists to `~/.fetchforge/tasks.json`.
 
 ## Prerequisites
 
@@ -50,11 +65,6 @@ wails build
 - `frontend/` - React UI and Wails bindings.
 - `docs/` - product notes and scope.
 - `wails.json` - project configuration.
-
-## Notes
-
-- Downloads are saved under `~/.fetchforge/downloads/<YYYY-MM-DD>/`.
-- Task history persists to `~/.fetchforge/tasks.json`.
 
 ## AI/Automation Handoff
 

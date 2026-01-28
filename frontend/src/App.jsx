@@ -591,6 +591,19 @@ function App() {
         </svg>
     );
 
+    const CloseIcon = () => (
+        <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+                d="M6 6l12 12M6 18L18 6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+        </svg>
+    );
+
     const getTaskTime = (task) => {
         const value = task?.createdAt || task?.updatedAt;
         const parsed = new Date(value);
@@ -661,11 +674,13 @@ function App() {
                                     </button>
                                 ) : null}
                                 <button
-                                    className="cursor-pointer rounded-lg border border-[var(--button-border)] px-2.5 py-1 text-[11px] uppercase tracking-[0.4px] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--button-border-hover)]"
+                                    className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-red-300/40 text-red-400 hover:border-red-300 hover:text-red-300"
                                     type="button"
                                     onClick={() => setNotice(null)}
+                                    aria-label={dictionary.noticeClose}
+                                    title={dictionary.noticeClose}
                                 >
-                                    {dictionary.noticeClose}
+                                    <CloseIcon />
                                 </button>
                             </div>
                         </div>
