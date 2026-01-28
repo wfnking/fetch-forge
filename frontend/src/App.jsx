@@ -3,7 +3,6 @@ import {
     CreateTasksFromText,
     DeleteTask,
     ExportTasksToFile,
-    ForceResumeTask,
     GetActiveProfile,
     GetTaskFileStatus,
     GetTaskResumeStatus,
@@ -49,9 +48,16 @@ const formatDateTime = (value) => {
     }).format(date);
 };
 
+const trimTitleSuffix = (value) => {
+    if (!value) {
+        return "";
+    }
+    return value.replace(/\s*\(\d+\)\s*$/, "").trim();
+};
+
 const copy = {
     en: {
-        subtitle: "Forge downloads from anywhere. Paste URLs, process in batches, own the pipeline.",
+        subtitle: "Paste URLs, process in batches, own the pipeline.",
         urlsLabel: "URLs",
         urlsPlaceholder: "Paste one or multiple URLs, separated by spaces or newlines.",
         tip: "Tip: Press Cmd/Ctrl + Enter to download.",
@@ -64,6 +70,9 @@ const copy = {
         darkTheme: "Dark theme",
         language: "中文",
         progress: "Progress",
+        speed: "Speed",
+        eta: "ETA",
+        downloading: "Downloading",
         play: "Play",
         profile: "Profile",
         export: "Export",
@@ -75,7 +84,6 @@ const copy = {
         importPickFile: "Choose file",
         importOverwrite: "Overwrite downloaded (requeue)",
         resume: "Continue",
-        forceResume: "Force resume",
         noticeExport: "Exported to",
         noticeOpenFolder: "Open folder",
         noticeClose: "Close",
@@ -98,7 +106,7 @@ const copy = {
         }
     },
     zh: {
-        subtitle: "从任何网站锻造资源。批量粘贴链接，建立你的下载流水线。",
+        subtitle: "批量粘贴链接，建立你的下载流水线。",
         urlsLabel: "链接",
         urlsPlaceholder: "粘贴一个或多个链接，使用空格或换行分隔。",
         tip: "提示：按 Cmd/Ctrl + Enter 开始下载。",
@@ -111,6 +119,9 @@ const copy = {
         darkTheme: "深色",
         language: "EN",
         progress: "进度",
+        speed: "速度",
+        eta: "剩余",
+        downloading: "下载中",
         play: "播放",
         profile: "模式",
         export: "导出",
@@ -122,7 +133,6 @@ const copy = {
         importPickFile: "选择文件",
         importOverwrite: "覆盖已下载并重新入队",
         resume: "继续下载",
-        forceResume: "强制继续",
         noticeExport: "已导出到",
         noticeOpenFolder: "打开目录",
         noticeClose: "关闭",
@@ -150,7 +160,7 @@ function App() {
     const [inputText, setInputText] = useState('');
     const [tasks, setTasks] = useState([]);
     const [theme, setTheme] = useState('light');
-    const [language, setLanguage] = useState('en');
+    const [language, setLanguage] = useState('zh');
     const [notice, setNotice] = useState(null);
     const [missingFiles, setMissingFiles] = useState(() => new Map());
     const [resumeCandidates, setResumeCandidates] = useState(() => new Map());
@@ -204,7 +214,10 @@ function App() {
     };
 
     const checkTaskResumeStatus = async (task) => {
-        if (!task) {
+        if (!task || task.status === "Success") {
+            if (task?.id) {
+                updateResumeStatus(task.id, '');
+            }
             return;
         }
         try {
@@ -237,7 +250,7 @@ function App() {
         }
         if (storedLanguage) {
             setLanguage(storedLanguage);
-        } else if (navigator.language?.startsWith('zh')) {
+        } else {
             setLanguage('zh');
         }
         document.documentElement.dataset.theme = storedTheme || theme;
@@ -375,15 +388,6 @@ function App() {
         }
     };
 
-    const handleForceResumeTask = async (taskId) => {
-        try {
-            await ForceResumeTask(taskId);
-            updateResumeStatus(taskId, '');
-        } catch (err) {
-            showNotice(resolveErrorMessage(err));
-        }
-    };
-
     const handleProfileChange = async (event) => {
         const nextId = event.target.value;
         try {
@@ -450,16 +454,16 @@ function App() {
     };
 
     const getDisplayTitle = (task) => {
-        const title = task?.title?.trim();
+        const title = trimTitleSuffix(task?.title?.trim());
         if (title && title !== "Pending title" && !/^\d+$/.test(title)) {
-            return task.title;
+            return title;
         }
         if (task?.outputPath) {
             const parts = task.outputPath.split(/[/\\]/);
             const filename = parts[parts.length - 1] || "";
             const trimmed = filename.replace(/\.[^/.]+$/, "");
             if (trimmed) {
-                return trimmed;
+                return trimTitleSuffix(trimmed);
             }
         }
         if (task?.url) {
@@ -542,22 +546,26 @@ function App() {
         return '';
     };
 
-    const getProgressLabel = (task) => {
+    const getProgressValue = (task) => {
         if (task?.status !== "Running") {
+            return null;
+        }
+        const value = parseProgress(task?.progress);
+        if (!value || value >= 100) {
+            return null;
+        }
+        return Math.max(0, Math.round(value));
+    };
+
+    const normalizeProgressMeta = (value) => {
+        if (!value) {
             return '';
         }
-        if (!task?.progress) {
+        const trimmed = String(value).trim();
+        if (!trimmed || trimmed === "N/A" || trimmed === "NA" || trimmed === "Unknown") {
             return '';
         }
-        const match = String(task.progress).match(/(\d+(\.\d+)?)/);
-        if (!match) {
-            return '';
-        }
-        const value = Number(match[1]);
-        if (Number.isNaN(value) || value >= 100) {
-            return '';
-        }
-        return `${Math.max(0, Math.round(value))}%`;
+        return trimmed;
     };
 
     const formatDuration = (seconds) => {
@@ -796,14 +804,41 @@ function App() {
                                             {getDisplayTitle(task)}
                                         </button>
                                         <div className="inline-flex items-center gap-2">
-                                            <div className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] uppercase tracking-[0.4px] ${getStatusClass(task.status)}`}>
-                                                <span className="text-[11px]">{getStatusLabel(task.status)}</span>
-                                                {getProgressLabel(task) ? (
-                                                    <span className="rounded-full bg-[var(--badge-bg)] px-1.5 py-0.5 text-[11px] tracking-[0.2px] text-[var(--badge-text)]">
-                                                        {getProgressLabel(task)}
-                                                    </span>
-                                                ) : null}
-                                            </div>
+                                            {task.status !== "Running" ? (
+                                                <div className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] uppercase tracking-[0.4px] ${getStatusClass(task.status)}`}>
+                                                    <span className="text-[11px]">{getStatusLabel(task.status)}</span>
+                                                </div>
+                                            ) : null}
+                                            {(() => {
+                                                const progressValue = getProgressValue(task);
+                                                if (progressValue === null) {
+                                                    return null;
+                                                }
+                                                return (
+                                                    <div className="inline-flex items-center gap-2 rounded-lg border border-[var(--progress-border)] bg-[var(--progress-bg)] px-2 py-1 text-[11px] uppercase tracking-[0.3px] text-[var(--progress-text)]">
+                                                        <span className="text-[10px] text-[var(--muted)]">{dictionary.downloading}</span>
+                                                        <span className="text-[12px] tabular-nums text-[var(--progress-text-strong)]">
+                                                            {progressValue}%
+                                                        </span>
+                                                        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-[var(--progress-track)]">
+                                                            <div
+                                                                className="h-full rounded-full transition-[width] duration-300"
+                                                                style={{width: `${progressValue}%`, background: "var(--progress-fill)"}}
+                                                            />
+                                                        </div>
+                                                        {normalizeProgressMeta(task?.speed) ? (
+                                                            <span className="text-[10px] tabular-nums text-[var(--progress-text)]">
+                                                                {dictionary.speed} {normalizeProgressMeta(task?.speed)}
+                                                            </span>
+                                                        ) : null}
+                                                        {normalizeProgressMeta(task?.eta) ? (
+                                                            <span className="text-[10px] tabular-nums text-[var(--progress-text)]">
+                                                                {dictionary.eta} {normalizeProgressMeta(task?.eta)}
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
+                                                );
+                                            })()}
                                             {task.status === "Success" ? (
                                                 <button
                                                     className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--button-border)] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--button-border-hover)] disabled:cursor-not-allowed disabled:opacity-50"
@@ -823,15 +858,6 @@ function App() {
                                                     onClick={() => handleResumeTask(task.id)}
                                                 >
                                                     {dictionary.resume}
-                                                </button>
-                                            ) : null}
-                                            {task.status === "Running" ? (
-                                                <button
-                                                    className="inline-flex h-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--button-border)] px-2 text-[11px] uppercase tracking-[0.4px] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--button-border-hover)]"
-                                                    type="button"
-                                                    onClick={() => handleForceResumeTask(task.id)}
-                                                >
-                                                    {dictionary.forceResume}
                                                 </button>
                                             ) : null}
                                             <button

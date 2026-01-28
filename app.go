@@ -35,6 +35,7 @@ type App struct {
 
 	activeProfileID string
 	lastCommand     string
+	ytDlpPath       string
 }
 
 // Task represents a download task.
@@ -46,6 +47,8 @@ type Task struct {
 	Status       string    `json:"status"`
 	Stage        string    `json:"stage"`
 	Progress     string    `json:"progress"`
+	Speed        string    `json:"speed"`
+	ETA          string    `json:"eta"`
 	OutputPath   string    `json:"outputPath"`
 	MissingOutput bool     `json:"missingOutput"`
 	ErrorMessage string    `json:"errorMessage"`
@@ -93,6 +96,7 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.ytDlpPath = resolveYtDlpPath()
 	a.loadConfig()
 	a.loadTasks()
 	go a.worker()
@@ -133,6 +137,9 @@ func (a *App) CreateTasksFromText(text string) ([]Task, error) {
 		a.emitTaskUpdate(task)
 	}
 	a.saveTasks()
+	for _, task := range created {
+		go a.prefetchTaskMetadata(task.ID, task.URL)
+	}
 	for _, id := range ids {
 		a.queue <- id
 	}
@@ -489,6 +496,7 @@ func (a *App) GetTaskResumeStatus(id string) (string, error) {
 	}
 
 	found := false
+	foundRecentPartial := false
 	_ = filepath.WalkDir(outputDir, func(path string, d os.DirEntry, err error) error {
 		if found || err != nil || d.IsDir() {
 			return nil
@@ -496,6 +504,9 @@ func (a *App) GetTaskResumeStatus(id string) (string, error) {
 		name := d.Name()
 		if !isPartialFile(name) {
 			return nil
+		}
+		if info, err := d.Info(); err == nil && info.ModTime().After(createdAt.Add(-1*time.Minute)) {
+			foundRecentPartial = true
 		}
 		normalizedName := normalizeForMatch(name)
 		if strings.Contains(normalizedName, normalizedTitle) {
@@ -505,6 +516,9 @@ func (a *App) GetTaskResumeStatus(id string) (string, error) {
 	})
 
 	if found {
+		return "ready", nil
+	}
+	if foundRecentPartial {
 		return "ready", nil
 	}
 	return "none", nil
@@ -624,7 +638,7 @@ func (a *App) runTask(id string) {
 	a.mu.Unlock()
 	a.emitTaskUpdate(updated)
 
-	metadata := fetchMetadata(url)
+	metadata := a.fetchMetadata(url)
 	if metadata != nil {
 		a.mu.Lock()
 		task, ok = a.tasks[id]
@@ -678,7 +692,7 @@ func (a *App) runTask(id string) {
 
 	outputTemplate := filepath.Join(outputDir, "%(title)s.%(ext)s")
 	profile, _ := a.getActiveProfile()
-	args := []string{"--newline", "--progress-template", "progress:%(progress._percent_str)s"}
+	args := []string{"--newline", "--progress-template", "progress:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s"}
 	args = append(args, profile.Args...)
 	args = append(args, extraYtDlpArgs()...)
 	if resumeRequested {
@@ -689,7 +703,7 @@ func (a *App) runTask(id string) {
 	a.lastCommand = "yt-dlp " + strings.Join(args, " ")
 	a.mu.Unlock()
 	fmt.Println("FetchForge:", a.lastCommand)
-	cmd := exec.Command("yt-dlp", args...)
+	cmd := a.ytDlpCommand(args...)
 	startTime := time.Now()
 
 	stdoutText, stderrText, err := a.runCommandWithProgress(id, cmd)
@@ -713,7 +727,9 @@ func (a *App) runTask(id string) {
 	task.OutputPath = outputPath
 	task.ErrorMessage = ""
 	if outputPath != "" {
-		task.Title = strings.TrimSuffix(filepath.Base(outputPath), filepath.Ext(outputPath))
+		if shouldUpdateTitle(task.Title) {
+			task.Title = strings.TrimSuffix(filepath.Base(outputPath), filepath.Ext(outputPath))
+		}
 		if info, err := os.Stat(outputPath); err == nil && !info.IsDir() {
 			task.Filesize = info.Size()
 		}
@@ -751,6 +767,27 @@ func (a *App) emitTaskUpdate(task Task) {
 		return
 	}
 	wailsruntime.EventsEmit(a.ctx, "task:update", task)
+}
+
+func (a *App) prefetchTaskMetadata(id, url string) {
+	metadata := a.fetchMetadata(url)
+	if metadata == nil {
+		return
+	}
+	a.mu.Lock()
+	task, ok := a.tasks[id]
+	if !ok {
+		a.mu.Unlock()
+		return
+	}
+	if shouldUpdateTitle(task.Title) && metadata.Title != "" {
+		task.Title = metadata.Title
+	}
+	task.UpdatedAt = time.Now()
+	updated := *task
+	a.mu.Unlock()
+	a.emitTaskUpdate(updated)
+	a.saveTasks()
 }
 
 func (a *App) runCommandWithProgress(id string, cmd *exec.Cmd) (string, string, error) {
@@ -798,17 +835,29 @@ func (a *App) runCommandWithProgress(id string, cmd *exec.Cmd) (string, string, 
 }
 
 func (a *App) updateTaskProgress(id, progress string) {
+	parts := strings.SplitN(progress, "|", 3)
+	percent := strings.TrimSpace(parts[0])
+	speed := ""
+	eta := ""
+	if len(parts) > 1 {
+		speed = strings.TrimSpace(parts[1])
+	}
+	if len(parts) > 2 {
+		eta = strings.TrimSpace(parts[2])
+	}
 	a.mu.Lock()
 	task, ok := a.tasks[id]
 	if !ok {
 		a.mu.Unlock()
 		return
 	}
-	if task.Progress == progress {
+	if task.Progress == percent && task.Speed == speed && task.ETA == eta {
 		a.mu.Unlock()
 		return
 	}
-	task.Progress = progress
+	task.Progress = percent
+	task.Speed = speed
+	task.ETA = eta
 	task.UpdatedAt = time.Now()
 	updated := *task
 	a.mu.Unlock()
@@ -941,12 +990,26 @@ func shouldUpdateTitle(title string) bool {
 	if title == "" || title == "Pending title" {
 		return true
 	}
+	isNumeric := true
+	isHex := true
+	hexLen := 0
 	for _, r := range title {
 		if r < '0' || r > '9' {
-			return false
+			isNumeric = false
+		}
+		if (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F') {
+			hexLen++
+		} else {
+			isHex = false
 		}
 	}
-	return true
+	if isNumeric {
+		return true
+	}
+	if isHex && hexLen >= 12 {
+		return true
+	}
+	return false
 }
 
 func newID() string {
@@ -972,6 +1035,59 @@ func extraYtDlpArgs() []string {
 		return nil
 	}
 	return strings.Fields(raw)
+}
+
+func resolveYtDlpPath() string {
+	if envPath := strings.TrimSpace(os.Getenv("FETCHFORGE_YTDLP_PATH")); envPath != "" {
+		if fileExists(envPath) {
+			return envPath
+		}
+	}
+	if path, err := exec.LookPath("yt-dlp"); err == nil {
+		return path
+	}
+	candidates := []string{
+		"/opt/homebrew/bin/yt-dlp",
+		"/usr/local/bin/yt-dlp",
+		"/usr/bin/yt-dlp",
+	}
+	exe, err := os.Executable()
+	if err == nil {
+		exeDir := filepath.Dir(exe)
+		candidates = append(candidates,
+			filepath.Join(exeDir, "yt-dlp"),
+			filepath.Join(exeDir, "..", "Resources", "yt-dlp"),
+		)
+	}
+	home, err := os.UserHomeDir()
+	if err == nil {
+		candidates = append(candidates, filepath.Join(home, ".fetchforge", "bin", "yt-dlp"))
+	}
+	for _, candidate := range candidates {
+		if fileExists(candidate) {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func (a *App) ytDlpCommand(args ...string) *exec.Cmd {
+	path := a.ytDlpPath
+	if path == "" {
+		path = "yt-dlp"
+	}
+	return exec.Command(path, args...)
+}
+
+func fileExists(path string) bool {
+	if strings.TrimSpace(path) == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return false
+	}
+	return true
 }
 
 func newestFilePath(root string) string {
@@ -1024,11 +1140,14 @@ type formatInfo struct {
 	Filesize   int64
 }
 
-func fetchMetadata(targetURL string) *Task {
+func (a *App) fetchMetadata(targetURL string) *Task {
 	if strings.TrimSpace(targetURL) == "" {
 		return nil
 	}
-	cmd := exec.Command("yt-dlp", "--skip-download", "--no-warnings", "--no-playlist", "-J", targetURL)
+	args := []string{"--skip-download", "--no-warnings", "--no-playlist", "-J"}
+	args = append(args, extraYtDlpArgs()...)
+	args = append(args, targetURL)
+	cmd := a.ytDlpCommand(args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil

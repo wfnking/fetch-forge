@@ -24,6 +24,8 @@ export namespace main {
 	    status: string;
 	    stage: string;
 	    progress: string;
+	    speed: string;
+	    eta: string;
 	    outputPath: string;
 	    missingOutput: boolean;
 	    errorMessage: string;
@@ -50,6 +52,8 @@ export namespace main {
 	        this.status = source["status"];
 	        this.stage = source["stage"];
 	        this.progress = source["progress"];
+	        this.speed = source["speed"];
+	        this.eta = source["eta"];
 	        this.outputPath = source["outputPath"];
 	        this.missingOutput = source["missingOutput"];
 	        this.errorMessage = source["errorMessage"];

@@ -38,6 +38,8 @@ Persistence:
 
 - Downloads are saved under `~/.fetchforge/downloads/<YYYY-MM-DD>/`.
 - Task history persists to `~/.fetchforge/tasks.json`.
+- Optional env var: `FETCHFORGE_YTDLP_ARGS` (space-separated extra `yt-dlp` args appended to downloads and metadata requests).
+- Optional env var: `FETCHFORGE_YTDLP_PATH` (absolute path to `yt-dlp`; GUI apps may not inherit shell PATH).
 
 ## Prerequisites
 

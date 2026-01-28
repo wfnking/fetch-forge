@@ -64,6 +64,8 @@ wails build
 - 下载目录：`~/.fetchforge/downloads/<YYYY-MM-DD>/`
 - 任务历史：`~/.fetchforge/tasks.json`
 - 配置文件：`~/.fetchforge/config.json`
+- 可选环境变量：`FETCHFORGE_YTDLP_ARGS`（为空格分隔的额外 `yt-dlp` 参数，会自动附加到下载与元数据请求中）
+- 可选环境变量：`FETCHFORGE_YTDLP_PATH`（指定 `yt-dlp` 可执行文件的完整路径；桌面应用不一定继承终端 PATH）
 
 ## AI/Automation Handoff
 
