@@ -107,3 +107,25 @@ body {
     --progress-text: rgba(15, 23, 42, 0.6);
     --progress-text-strong: #0f172a;
 }
+
+.progress-indeterminate {
+    position: relative;
+}
+
+.progress-indeterminate__bar {
+    width: 40%;
+    background: var(--progress-fill);
+    animation: progress-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+    0% {
+        transform: translateX(-120%);
+    }
+    50% {
+        transform: translateX(10%);
+    }
+    100% {
+        transform: translateX(120%);
+    }
+}

@@ -712,6 +712,18 @@ func (a *App) runTask(id string) {
 		return
 	}
 
+	a.mu.Lock()
+	task, ok = a.tasks[id]
+	if !ok {
+		a.mu.Unlock()
+		return
+	}
+	task.Stage = "Finalize"
+	task.UpdatedAt = time.Now()
+	updated = *task
+	a.mu.Unlock()
+	a.emitTaskUpdate(updated)
+
 	outputPath := newestFilePathAfter(outputDir, startTime)
 	if outputPath == "" {
 		outputPath = newestFilePath(outputDir)

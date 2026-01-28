@@ -73,6 +73,8 @@ const copy = {
         speed: "Speed",
         eta: "ETA",
         downloading: "Downloading",
+        preparing: "Preparing",
+        finalizing: "Finalizing",
         play: "Play",
         profile: "Profile",
         export: "Export",
@@ -122,6 +124,8 @@ const copy = {
         speed: "速度",
         eta: "剩余",
         downloading: "下载中",
+        preparing: "准备中",
+        finalizing: "整理中",
         play: "播放",
         profile: "模式",
         export: "导出",
@@ -557,6 +561,20 @@ function App() {
         return Math.max(0, Math.round(value));
     };
 
+    const getRunningLabel = (task, progressValue) => {
+        const stage = String(task?.stage || '').toLowerCase();
+        if (stage.includes('finalize')) {
+            return dictionary.finalizing;
+        }
+        if (progressValue === null) {
+            return dictionary.preparing;
+        }
+        if (stage.includes('resolve') || stage.includes('parse')) {
+            return dictionary.preparing;
+        }
+        return dictionary.downloading;
+    };
+
     const normalizeProgressMeta = (value) => {
         if (!value) {
             return '';
@@ -810,30 +828,41 @@ function App() {
                                                 </div>
                                             ) : null}
                                             {(() => {
-                                                const progressValue = getProgressValue(task);
-                                                if (progressValue === null) {
+                                                if (task.status !== "Running") {
                                                     return null;
                                                 }
+                                                const progressValue = getProgressValue(task);
+                                                const label = getRunningLabel(task, progressValue);
+                                                const speed = normalizeProgressMeta(task?.speed);
+                                                const eta = normalizeProgressMeta(task?.eta);
                                                 return (
                                                     <div className="inline-flex items-center gap-2 rounded-lg border border-[var(--progress-border)] bg-[var(--progress-bg)] px-2 py-1 text-[11px] uppercase tracking-[0.3px] text-[var(--progress-text)]">
-                                                        <span className="text-[10px] text-[var(--muted)]">{dictionary.downloading}</span>
-                                                        <span className="text-[12px] tabular-nums text-[var(--progress-text-strong)]">
-                                                            {progressValue}%
-                                                        </span>
-                                                        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-[var(--progress-track)]">
-                                                            <div
-                                                                className="h-full rounded-full transition-[width] duration-300"
-                                                                style={{width: `${progressValue}%`, background: "var(--progress-fill)"}}
-                                                            />
-                                                        </div>
-                                                        {normalizeProgressMeta(task?.speed) ? (
+                                                        <span className="text-[10px] text-[var(--muted)]">{label}</span>
+                                                        {progressValue !== null ? (
+                                                            <>
+                                                                <span className="text-[12px] tabular-nums text-[var(--progress-text-strong)]">
+                                                                    {progressValue}%
+                                                                </span>
+                                                                <div className="h-1.5 w-20 overflow-hidden rounded-full bg-[var(--progress-track)]">
+                                                                    <div
+                                                                        className="h-full rounded-full transition-[width] duration-300"
+                                                                        style={{width: `${progressValue}%`, background: "var(--progress-fill)"}}
+                                                                    />
+                                                                </div>
+                                                            </>
+                                                        ) : (
+                                                            <div className="progress-indeterminate h-1.5 w-20 overflow-hidden rounded-full bg-[var(--progress-track)]">
+                                                                <div className="progress-indeterminate__bar h-full rounded-full" />
+                                                            </div>
+                                                        )}
+                                                        {speed ? (
                                                             <span className="text-[10px] tabular-nums text-[var(--progress-text)]">
-                                                                {dictionary.speed} {normalizeProgressMeta(task?.speed)}
+                                                                {dictionary.speed} {speed}
                                                             </span>
                                                         ) : null}
-                                                        {normalizeProgressMeta(task?.eta) ? (
+                                                        {eta ? (
                                                             <span className="text-[10px] tabular-nums text-[var(--progress-text)]">
-                                                                {dictionary.eta} {normalizeProgressMeta(task?.eta)}
+                                                                {dictionary.eta} {eta}
                                                             </span>
                                                         ) : null}
                                                     </div>
