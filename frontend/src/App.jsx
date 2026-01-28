@@ -6,6 +6,7 @@ import {
     GetActiveProfile,
     GetTaskFileStatus,
     GetTaskResumeStatus,
+    GetUseBrowserCookies,
     ImportTasks,
     ListProfiles,
     ListTasks,
@@ -13,6 +14,7 @@ import {
     OpenTaskFile,
     OpenTaskFolder,
     ResumeTask,
+    SetUseBrowserCookies,
     SetActiveProfile
 } from "../wailsjs/go/main/App";
 import {BrowserOpenURL, EventsOff, EventsOn} from "../wailsjs/runtime/runtime";
@@ -87,6 +89,7 @@ const copy = {
         importOverwrite: "Overwrite downloaded (requeue)",
         resume: "Continue",
         noticeExport: "Exported to",
+        useBrowserCookies: "Use browser cookies",
         noticeOpenFolder: "Open folder",
         noticeClose: "Close",
         noticeImport: "Import completed",
@@ -138,6 +141,7 @@ const copy = {
         importOverwrite: "覆盖已下载并重新入队",
         resume: "继续下载",
         noticeExport: "已导出到",
+        useBrowserCookies: "使用浏览器 Cookie",
         noticeOpenFolder: "打开目录",
         noticeClose: "关闭",
         noticeImport: "导入完成",
@@ -175,6 +179,7 @@ function App() {
     const [importMode, setImportMode] = useState('merge');
     const [importFileName, setImportFileName] = useState('');
     const [overwriteDownloaded, setOverwriteDownloaded] = useState(false);
+    const [useBrowserCookies, setUseBrowserCookies] = useState(false);
 
     const updateMissingFile = (taskId, status) => {
         setMissingFiles((prev) => {
@@ -269,6 +274,13 @@ function App() {
             .then((profile) => {
                 if (mounted) {
                     setActiveProfile(profile);
+                }
+            })
+            .catch(() => {});
+        GetUseBrowserCookies()
+            .then((enabled) => {
+                if (mounted) {
+                    setUseBrowserCookies(Boolean(enabled));
                 }
             })
             .catch(() => {});
@@ -399,6 +411,17 @@ function App() {
             const next = profiles.find((profile) => profile.id === nextId);
             setActiveProfile(next || null);
         } catch (err) {
+            showNotice(resolveErrorMessage(err));
+        }
+    };
+
+    const handleCookieToggle = async (event) => {
+        const enabled = event.target.checked;
+        setUseBrowserCookies(enabled);
+        try {
+            await SetUseBrowserCookies(enabled);
+        } catch (err) {
+            setUseBrowserCookies((prev) => !prev);
             showNotice(resolveErrorMessage(err));
         }
     };
@@ -543,6 +566,9 @@ function App() {
         }
         if (status === "missing") {
             return dictionary.errors.fileNotFound;
+        }
+        if (task?.status === "Success") {
+            return '';
         }
         if (task?.missingOutput) {
             return dictionary.errors.fileNotFound;
@@ -783,19 +809,30 @@ function App() {
                     />
                     <div className="mt-2 text-[12px] text-[var(--muted)]">{dictionary.tip}</div>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                        <div className="inline-flex items-center gap-2 text-[12px] text-[var(--muted)]">
-                            <span className="text-[10px] uppercase tracking-[0.4px]">{dictionary.profile}</span>
-                            <select
-                                className="h-9 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-[12px] text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--input-border-focus)]"
-                                value={activeProfile?.id || defaultProfileID}
-                                onChange={handleProfileChange}
-                            >
-                                {profiles.map((profile) => (
-                                    <option key={profile.id} value={profile.id}>
-                                        {profile.name}
-                                    </option>
-                                ))}
-                            </select>
+                        <div className="flex flex-wrap items-center gap-3 text-[12px] text-[var(--muted)]">
+                            <div className="inline-flex items-center gap-2">
+                                <span className="text-[10px] uppercase tracking-[0.4px]">{dictionary.profile}</span>
+                                <select
+                                    className="h-9 rounded-lg border border-[var(--input-border)] bg-[var(--input-bg)] px-3 text-[12px] text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--input-border-focus)]"
+                                    value={activeProfile?.id || defaultProfileID}
+                                    onChange={handleProfileChange}
+                                >
+                                    {profiles.map((profile) => (
+                                        <option key={profile.id} value={profile.id}>
+                                            {profile.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <label className="inline-flex items-center gap-2 rounded-full border border-[var(--button-border)] px-3 py-1.5 text-[11px] uppercase tracking-[0.35px] text-[var(--muted)]">
+                                <input
+                                    type="checkbox"
+                                    className="h-4 w-4 accent-[var(--accent)]"
+                                    checked={useBrowserCookies}
+                                    onChange={handleCookieToggle}
+                                />
+                                {dictionary.useBrowserCookies}
+                            </label>
                         </div>
                         <button
                             className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-[var(--accent)] px-4 py-2 font-semibold text-[var(--accent-text)] shadow-sm transition hover:shadow-[0_8px_16px_rgba(0,0,0,0.2)]"
@@ -880,7 +917,7 @@ function App() {
                                                     <PlayIcon />
                                                 </button>
                                             ) : null}
-                                            {resumeCandidates.has(task.id) ? (
+                                            {task.status !== "Success" && resumeCandidates.has(task.id) ? (
                                                 <button
                                                     className="inline-flex h-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--button-border)] px-2 text-[11px] uppercase tracking-[0.4px] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--button-border-hover)]"
                                                     type="button"

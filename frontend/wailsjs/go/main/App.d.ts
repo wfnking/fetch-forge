@@ -18,6 +18,8 @@ export function GetTaskFileStatus(arg1:string):Promise<string>;
 
 export function GetTaskResumeStatus(arg1:string):Promise<string>;
 
+export function GetUseBrowserCookies():Promise<boolean>;
+
 export function ImportTasks(arg1:string,arg2:string,arg3:boolean):Promise<Array<main.Task>>;
 
 export function ListProfiles():Promise<Array<main.Profile>>;
@@ -33,3 +35,5 @@ export function OpenTaskFolder(arg1:string):Promise<void>;
 export function ResumeTask(arg1:string):Promise<void>;
 
 export function SetActiveProfile(arg1:string):Promise<void>;
+
+export function SetUseBrowserCookies(arg1:boolean):Promise<void>;

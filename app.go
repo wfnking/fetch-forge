@@ -36,6 +36,8 @@ type App struct {
 	activeProfileID string
 	lastCommand     string
 	ytDlpPath       string
+	running         map[string]*exec.Cmd
+	useBrowserCookies bool
 }
 
 // Task represents a download task.
@@ -78,6 +80,7 @@ type Profile struct {
 
 type appConfig struct {
 	ActiveProfileID string `json:"activeProfileId"`
+	UseBrowserCookies bool `json:"useBrowserCookies"`
 }
 
 const defaultProfileID = "default"
@@ -89,6 +92,8 @@ func NewApp() *App {
 		order:           make([]string, 0),
 		queue:           make(chan string, 100),
 		activeProfileID: defaultProfileID,
+		running:         make(map[string]*exec.Cmd),
+		useBrowserCookies: false,
 	}
 }
 
@@ -169,7 +174,13 @@ func (a *App) DeleteTask(id string) error {
 		a.mu.Unlock()
 		return errors.New("task not found")
 	}
+	if cmd, ok := a.running[id]; ok && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+		delete(a.running, id)
+	}
 	outputPath := task.OutputPath
+	createdAt := task.CreatedAt
+	title := task.Title
 	a.mu.Unlock()
 
 	if outputPath != "" {
@@ -179,6 +190,7 @@ func (a *App) DeleteTask(id string) error {
 			}
 		}
 	}
+	cleanupPartialFiles(createdAt, title)
 
 	a.mu.Lock()
 	delete(a.tasks, id)
@@ -270,6 +282,20 @@ func (a *App) SetActiveProfile(profileID string) error {
 func (a *App) GetActiveProfile() (Profile, error) {
 	profile, _ := a.getActiveProfile()
 	return profile, nil
+}
+
+func (a *App) GetUseBrowserCookies() (bool, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.useBrowserCookies, nil
+}
+
+func (a *App) SetUseBrowserCookies(enabled bool) error {
+	a.mu.Lock()
+	a.useBrowserCookies = enabled
+	a.mu.Unlock()
+	a.saveConfig()
+	return nil
 }
 
 func (a *App) OpenPath(path string) error {
@@ -438,14 +464,38 @@ func (a *App) GetTaskFileStatus(id string) (string, error) {
 		return "", errors.New("task not found")
 	}
 	outputPath := task.OutputPath
+	createdAt := task.CreatedAt
+	title := task.Title
 	a.mu.Unlock()
 
 	if outputPath == "" {
+		if resolved := resolveOutputPath(createdAt, title); resolved != "" {
+			a.mu.Lock()
+			if task, ok := a.tasks[id]; ok {
+				task.OutputPath = resolved
+				task.MissingOutput = false
+				task.UpdatedAt = time.Now()
+			}
+			a.mu.Unlock()
+			a.saveTasks()
+			return "ok", nil
+		}
 		return "pending", nil
 	}
 
 	info, err := os.Stat(outputPath)
 	if err != nil || info.IsDir() {
+		if resolved := resolveOutputPath(createdAt, title); resolved != "" {
+			a.mu.Lock()
+			if task, ok := a.tasks[id]; ok {
+				task.OutputPath = resolved
+				task.MissingOutput = false
+				task.UpdatedAt = time.Now()
+			}
+			a.mu.Unlock()
+			a.saveTasks()
+			return "ok", nil
+		}
 		return "missing", nil
 	}
 
@@ -695,6 +745,9 @@ func (a *App) runTask(id string) {
 	args := []string{"--newline", "--progress-template", "progress:%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s"}
 	args = append(args, profile.Args...)
 	args = append(args, extraYtDlpArgs()...)
+	if a.useBrowserCookies {
+		args = append(args, "--cookies-from-browser", "chrome")
+	}
 	if resumeRequested {
 		args = append(args, "--continue")
 	}
@@ -704,6 +757,14 @@ func (a *App) runTask(id string) {
 	a.mu.Unlock()
 	fmt.Println("FetchForge:", a.lastCommand)
 	cmd := a.ytDlpCommand(args...)
+	a.mu.Lock()
+	a.running[id] = cmd
+	a.mu.Unlock()
+	defer func() {
+		a.mu.Lock()
+		delete(a.running, id)
+		a.mu.Unlock()
+	}()
 	startTime := time.Now()
 
 	stdoutText, stderrText, err := a.runCommandWithProgress(id, cmd)
@@ -968,6 +1029,61 @@ func normalizeForMatch(value string) string {
 	return b.String()
 }
 
+func cleanupPartialFiles(createdAt time.Time, title string) {
+	outputDir, err := taskOutputDir(createdAt)
+	if err != nil {
+		return
+	}
+	normalizedTitle := normalizeForMatch(title)
+	_ = filepath.WalkDir(outputDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		name := d.Name()
+		if !isPartialFile(name) {
+			return nil
+		}
+		if normalizedTitle != "" {
+			normalizedName := normalizeForMatch(name)
+			if !strings.Contains(normalizedName, normalizedTitle) {
+				return nil
+			}
+		}
+		_ = os.Remove(path)
+		return nil
+	})
+}
+
+func resolveOutputPath(createdAt time.Time, title string) string {
+	outputDir, err := taskOutputDir(createdAt)
+	if err != nil {
+		return ""
+	}
+	normalizedTitle := normalizeForMatch(title)
+	var resolved string
+	_ = filepath.WalkDir(outputDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		name := d.Name()
+		if isPartialFile(name) {
+			return nil
+		}
+		if normalizedTitle == "" {
+			if resolved == "" {
+				resolved = path
+			}
+			return nil
+		}
+		normalizedName := normalizeForMatch(name)
+		if strings.Contains(normalizedName, normalizedTitle) {
+			resolved = path
+		}
+		return nil
+	})
+	return resolved
+}
+
 func builtinProfiles() []Profile {
 	return []Profile{
 		{
@@ -1158,6 +1274,9 @@ func (a *App) fetchMetadata(targetURL string) *Task {
 	}
 	args := []string{"--skip-download", "--no-warnings", "--no-playlist", "-J"}
 	args = append(args, extraYtDlpArgs()...)
+	if a.useBrowserCookies {
+		args = append(args, "--cookies-from-browser", "chrome")
+	}
 	args = append(args, targetURL)
 	cmd := a.ytDlpCommand(args...)
 	output, err := cmd.Output()
@@ -1400,6 +1519,7 @@ func (a *App) loadConfig() {
 	}
 	a.mu.Lock()
 	a.activeProfileID = config.ActiveProfileID
+	a.useBrowserCookies = config.UseBrowserCookies
 	a.mu.Unlock()
 }
 
@@ -1415,6 +1535,7 @@ func (a *App) saveConfig() {
 	a.mu.Lock()
 	config := appConfig{
 		ActiveProfileID: a.activeProfileID,
+		UseBrowserCookies: a.useBrowserCookies,
 	}
 	a.mu.Unlock()
 	data, err := json.MarshalIndent(config, "", "  ")

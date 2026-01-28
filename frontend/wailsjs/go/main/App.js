@@ -34,6 +34,10 @@ export function GetTaskResumeStatus(arg1) {
   return window['go']['main']['App']['GetTaskResumeStatus'](arg1);
 }
 
+export function GetUseBrowserCookies() {
+  return window['go']['main']['App']['GetUseBrowserCookies']();
+}
+
 export function ImportTasks(arg1, arg2, arg3) {
   return window['go']['main']['App']['ImportTasks'](arg1, arg2, arg3);
 }
@@ -64,4 +68,8 @@ export function ResumeTask(arg1) {
 
 export function SetActiveProfile(arg1) {
   return window['go']['main']['App']['SetActiveProfile'](arg1);
+}
+
+export function SetUseBrowserCookies(arg1) {
+  return window['go']['main']['App']['SetUseBrowserCookies'](arg1);
 }
