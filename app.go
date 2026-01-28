@@ -49,6 +49,7 @@ type Task struct {
 	OutputPath   string    `json:"outputPath"`
 	MissingOutput bool     `json:"missingOutput"`
 	ErrorMessage string    `json:"errorMessage"`
+	Resume       bool      `json:"resume"`
 	Duration     int       `json:"duration"`
 	Filesize     int64     `json:"filesize"`
 	Width        int       `json:"width"`
@@ -444,6 +445,121 @@ func (a *App) GetTaskFileStatus(id string) (string, error) {
 	return "ok", nil
 }
 
+// GetTaskResumeStatus reports whether a task has partial output available for resuming.
+// Returns "ready" or "none".
+func (a *App) GetTaskResumeStatus(id string) (string, error) {
+	a.mu.Lock()
+	task, ok := a.tasks[id]
+	if !ok {
+		a.mu.Unlock()
+		return "", errors.New("task not found")
+	}
+	createdAt := task.CreatedAt
+	title := strings.TrimSpace(task.Title)
+	outputPath := strings.TrimSpace(task.OutputPath)
+	filesize := task.Filesize
+	status := task.Status
+	updatedAt := task.UpdatedAt
+	a.mu.Unlock()
+
+	if status == statusRunning && time.Since(updatedAt) < 30*time.Second {
+		return "none", nil
+	}
+
+	outputDir, err := taskOutputDir(createdAt)
+	if err != nil {
+		return "none", nil
+	}
+
+	if outputPath != "" {
+		if info, err := os.Stat(outputPath); err == nil && !info.IsDir() && filesize > 0 {
+			if info.Size() < filesize {
+				return "ready", nil
+			}
+		}
+	}
+
+	if title == "" || title == "Pending title" {
+		return "none", nil
+	}
+
+	normalizedTitle := normalizeForMatch(title)
+	if normalizedTitle == "" {
+		return "none", nil
+	}
+
+	found := false
+	_ = filepath.WalkDir(outputDir, func(path string, d os.DirEntry, err error) error {
+		if found || err != nil || d.IsDir() {
+			return nil
+		}
+		name := d.Name()
+		if !isPartialFile(name) {
+			return nil
+		}
+		normalizedName := normalizeForMatch(name)
+		if strings.Contains(normalizedName, normalizedTitle) {
+			found = true
+		}
+		return nil
+	})
+
+	if found {
+		return "ready", nil
+	}
+	return "none", nil
+}
+
+// ResumeTask re-queues a task to continue an interrupted download.
+func (a *App) ResumeTask(id string) error {
+	a.mu.Lock()
+	task, ok := a.tasks[id]
+	if !ok {
+		a.mu.Unlock()
+		return errors.New("task not found")
+	}
+	if task.Status == statusRunning && time.Since(task.UpdatedAt) < 30*time.Second {
+		a.mu.Unlock()
+		return errors.New("task is already running")
+	}
+	task.Status = statusQueued
+	task.Stage = "Resume"
+	task.Progress = ""
+	task.ErrorMessage = ""
+	task.Resume = true
+	task.UpdatedAt = time.Now()
+	updated := *task
+	a.mu.Unlock()
+
+	a.emitTaskUpdate(updated)
+	a.saveTasks()
+	a.enqueueTasks([]string{id})
+	return nil
+}
+
+// ForceResumeTask re-queues a task even if it appears to be running.
+func (a *App) ForceResumeTask(id string) error {
+	a.mu.Lock()
+	task, ok := a.tasks[id]
+	if !ok {
+		a.mu.Unlock()
+		return errors.New("task not found")
+	}
+	task.Status = statusQueued
+	task.Stage = "Force Resume"
+	task.Progress = ""
+	task.ErrorMessage = ""
+	task.Resume = true
+	task.UpdatedAt = time.Now()
+	updated := *task
+	a.mu.Unlock()
+
+	a.emitTaskUpdate(updated)
+	a.saveTasks()
+	a.enqueueTasks([]string{id})
+	return nil
+}
+
 func openWithDefaultApp(target string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
@@ -498,6 +614,8 @@ func (a *App) runTask(id string) {
 		a.mu.Unlock()
 		return
 	}
+	resumeRequested := task.Resume
+	task.Resume = false
 	task.Status = statusRunning
 	task.Stage = "Resolve metadata"
 	task.UpdatedAt = time.Now()
@@ -562,6 +680,10 @@ func (a *App) runTask(id string) {
 	profile, _ := a.getActiveProfile()
 	args := []string{"--newline", "--progress-template", "progress:%(progress._percent_str)s"}
 	args = append(args, profile.Args...)
+	args = append(args, extraYtDlpArgs()...)
+	if resumeRequested {
+		args = append(args, "--continue")
+	}
 	args = append(args, "-o", outputTemplate, url)
 	a.mu.Lock()
 	a.lastCommand = "yt-dlp " + strings.Join(args, " ")
@@ -761,6 +883,30 @@ func outputMissing(outputPath string) bool {
 	return false
 }
 
+func isPartialFile(name string) bool {
+	lower := strings.ToLower(name)
+	if strings.Contains(lower, ".part") {
+		return true
+	}
+	if strings.HasSuffix(lower, ".ytdl") {
+		return true
+	}
+	return false
+}
+
+func normalizeForMatch(value string) string {
+	if value == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range strings.ToLower(value) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 func builtinProfiles() []Profile {
 	return []Profile{
 		{
@@ -818,6 +964,14 @@ func taskOutputDir(createdAt time.Time) (string, error) {
 	}
 	dateFolder := createdAt.Format("2006-01-02")
 	return filepath.Join(home, ".fetchforge", "downloads", dateFolder), nil
+}
+
+func extraYtDlpArgs() []string {
+	raw := strings.TrimSpace(os.Getenv("FETCHFORGE_YTDLP_ARGS"))
+	if raw == "" {
+		return nil
+	}
+	return strings.Fields(raw)
 }
 
 func newestFilePath(root string) string {

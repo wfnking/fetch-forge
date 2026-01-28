@@ -27,6 +27,7 @@ export namespace main {
 	    outputPath: string;
 	    missingOutput: boolean;
 	    errorMessage: string;
+	    resume: boolean;
 	    duration: number;
 	    filesize: number;
 	    width: number;
@@ -52,6 +53,7 @@ export namespace main {
 	        this.outputPath = source["outputPath"];
 	        this.missingOutput = source["missingOutput"];
 	        this.errorMessage = source["errorMessage"];
+	        this.resume = source["resume"];
 	        this.duration = source["duration"];
 	        this.filesize = source["filesize"];
 	        this.width = source["width"];

@@ -3,14 +3,17 @@ import {
     CreateTasksFromText,
     DeleteTask,
     ExportTasksToFile,
+    ForceResumeTask,
     GetActiveProfile,
     GetTaskFileStatus,
+    GetTaskResumeStatus,
     ImportTasks,
     ListProfiles,
     ListTasks,
     OpenPath,
     OpenTaskFile,
     OpenTaskFolder,
+    ResumeTask,
     SetActiveProfile
 } from "../wailsjs/go/main/App";
 import {BrowserOpenURL, EventsOff, EventsOn} from "../wailsjs/runtime/runtime";
@@ -71,6 +74,8 @@ const copy = {
         importCancel: "Cancel",
         importPickFile: "Choose file",
         importOverwrite: "Overwrite downloaded (requeue)",
+        resume: "Continue",
+        forceResume: "Force resume",
         noticeExport: "Exported to",
         noticeOpenFolder: "Open folder",
         noticeClose: "Close",
@@ -116,6 +121,8 @@ const copy = {
         importCancel: "取消",
         importPickFile: "选择文件",
         importOverwrite: "覆盖已下载并重新入队",
+        resume: "继续下载",
+        forceResume: "强制继续",
         noticeExport: "已导出到",
         noticeOpenFolder: "打开目录",
         noticeClose: "关闭",
@@ -146,6 +153,7 @@ function App() {
     const [language, setLanguage] = useState('en');
     const [notice, setNotice] = useState(null);
     const [missingFiles, setMissingFiles] = useState(() => new Map());
+    const [resumeCandidates, setResumeCandidates] = useState(() => new Map());
     const [profiles, setProfiles] = useState([]);
     const [activeProfile, setActiveProfile] = useState(null);
     const [showImportModal, setShowImportModal] = useState(false);
@@ -183,12 +191,40 @@ function App() {
         }
     };
 
+    const updateResumeStatus = (taskId, status) => {
+        setResumeCandidates((prev) => {
+            const next = new Map(prev);
+            if (status) {
+                next.set(taskId, status);
+            } else {
+                next.delete(taskId);
+            }
+            return next;
+        });
+    };
+
+    const checkTaskResumeStatus = async (task) => {
+        if (!task) {
+            return;
+        }
+        try {
+            const status = await GetTaskResumeStatus(task.id);
+            if (status === "ready") {
+                updateResumeStatus(task.id, "ready");
+            } else {
+                updateResumeStatus(task.id, '');
+            }
+        } catch {
+        }
+    };
+
     const refreshMissingStatuses = (items) => {
         if (!items || items.length === 0) {
             return;
         }
         items.forEach((task) => {
             void checkTaskFileStatus(task);
+            void checkTaskResumeStatus(task);
         });
     };
 
@@ -327,6 +363,24 @@ function App() {
                 return;
             }
             showNotice(message);
+        }
+    };
+
+    const handleResumeTask = async (taskId) => {
+        try {
+            await ResumeTask(taskId);
+            updateResumeStatus(taskId, '');
+        } catch (err) {
+            showNotice(resolveErrorMessage(err));
+        }
+    };
+
+    const handleForceResumeTask = async (taskId) => {
+        try {
+            await ForceResumeTask(taskId);
+            updateResumeStatus(taskId, '');
+        } catch (err) {
+            showNotice(resolveErrorMessage(err));
         }
     };
 
@@ -760,6 +814,24 @@ function App() {
                                                     title={dictionary.play}
                                                 >
                                                     <PlayIcon />
+                                                </button>
+                                            ) : null}
+                                            {resumeCandidates.has(task.id) ? (
+                                                <button
+                                                    className="inline-flex h-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--button-border)] px-2 text-[11px] uppercase tracking-[0.4px] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--button-border-hover)]"
+                                                    type="button"
+                                                    onClick={() => handleResumeTask(task.id)}
+                                                >
+                                                    {dictionary.resume}
+                                                </button>
+                                            ) : null}
+                                            {task.status === "Running" ? (
+                                                <button
+                                                    className="inline-flex h-8 cursor-pointer items-center justify-center rounded-lg border border-[var(--button-border)] px-2 text-[11px] uppercase tracking-[0.4px] text-[var(--muted)] hover:text-[var(--text)] hover:border-[var(--button-border-hover)]"
+                                                    type="button"
+                                                    onClick={() => handleForceResumeTask(task.id)}
+                                                >
+                                                    {dictionary.forceResume}
                                                 </button>
                                             ) : null}
                                             <button

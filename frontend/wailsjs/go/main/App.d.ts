@@ -10,9 +10,13 @@ export function ExportTasks():Promise<string>;
 
 export function ExportTasksToFile():Promise<string>;
 
+export function ForceResumeTask(arg1:string):Promise<void>;
+
 export function GetActiveProfile():Promise<main.Profile>;
 
 export function GetTaskFileStatus(arg1:string):Promise<string>;
+
+export function GetTaskResumeStatus(arg1:string):Promise<string>;
 
 export function ImportTasks(arg1:string,arg2:string,arg3:boolean):Promise<Array<main.Task>>;
 
@@ -25,5 +29,7 @@ export function OpenPath(arg1:string):Promise<void>;
 export function OpenTaskFile(arg1:string):Promise<void>;
 
 export function OpenTaskFolder(arg1:string):Promise<void>;
+
+export function ResumeTask(arg1:string):Promise<void>;
 
 export function SetActiveProfile(arg1:string):Promise<void>;

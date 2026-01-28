@@ -18,12 +18,20 @@ export function ExportTasksToFile() {
   return window['go']['main']['App']['ExportTasksToFile']();
 }
 
+export function ForceResumeTask(arg1) {
+  return window['go']['main']['App']['ForceResumeTask'](arg1);
+}
+
 export function GetActiveProfile() {
   return window['go']['main']['App']['GetActiveProfile']();
 }
 
 export function GetTaskFileStatus(arg1) {
   return window['go']['main']['App']['GetTaskFileStatus'](arg1);
+}
+
+export function GetTaskResumeStatus(arg1) {
+  return window['go']['main']['App']['GetTaskResumeStatus'](arg1);
 }
 
 export function ImportTasks(arg1, arg2, arg3) {
@@ -48,6 +56,10 @@ export function OpenTaskFile(arg1) {
 
 export function OpenTaskFolder(arg1) {
   return window['go']['main']['App']['OpenTaskFolder'](arg1);
+}
+
+export function ResumeTask(arg1) {
+  return window['go']['main']['App']['ResumeTask'](arg1);
 }
 
 export function SetActiveProfile(arg1) {
